@@ -4,14 +4,15 @@ import { createAnt, stepAnts, type Ant, type Direction } from './game/ants'
 
 // Game configuration
 const cellSize = 12
-const gridWidth = 50
-const gridHeight = 50 // Changed to 50
+const gridWidth = 80  // Changed from 50 to 80
+const gridHeight = 80 // Changed from 50 to 80
 
 // Game state
 let board: Board = createBoard(gridWidth, gridHeight, 0)
 let running = false
 let timer: number | null = null
 let generation = 0
+let showGrid = false // New state variable to track grid visibility
 
 // Ants state
 let ants: Ant[] = []
@@ -23,12 +24,12 @@ let isPlacingAnts = false
 let isDragging = false
 
 // Structures state
-let structuresEnabled = false
+let structuresEnabled = true  // Changed from false to true
 
 // Lifecycle state
-let lifecycleEnabled = false
-let maxFullness = 50
-let maxLifeDuration = 100 // Default life duration value
+let lifecycleEnabled = true   // Changed from false to true
+let maxFullness = 110        // Changed from 50 to 110
+let maxLifeDuration = 500    // Changed from 100 to 500
 
 // UI elements
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -46,6 +47,7 @@ const addRandomAntBtn = document.createElement('button')
 const toggleGoLBtn = document.createElement('button')
 const toggleStructuresBtn = document.createElement('button')
 const toggleLifecycleBtn = document.createElement('button')
+const toggleGridBtn = document.createElement('button') // New button for grid visibility
 const speedLabel = document.createElement('label')
 const speedInput = document.createElement('input')
 const solidityLabel = document.createElement('label')
@@ -68,6 +70,7 @@ addRandomAntBtn.textContent = 'Add Random Ant'
 toggleGoLBtn.textContent = `GoL: ${golEnabled ? 'ON' : 'OFF'}`
 toggleStructuresBtn.textContent = `Structures: ${structuresEnabled ? 'ON' : 'OFF'}`
 toggleLifecycleBtn.textContent = `Ants Lifecycle: ${lifecycleEnabled ? 'ON' : 'OFF'}`
+toggleGridBtn.textContent = `Grid: ${showGrid ? 'ON' : 'OFF'}` // Initialize grid toggle button
 title.textContent = 'Sacred Game of Life'
 genCounter.textContent = `Generation: ${generation}`
 
@@ -102,7 +105,7 @@ configureNumberInput(lifeDurationInput)
 widthInput.value = gridWidth.toString()
 heightInput.value = gridHeight.toString()
 speedNumberInput.value = '20'
-solidityInput.value = '25'
+solidityInput.value = '500'  // Changed from 25 to 500
 fullnessInput.value = maxFullness.toString()
 lifeDurationInput.value = maxLifeDuration.toString()
 
@@ -152,8 +155,8 @@ speedInput.value = '20'
 
 soliditySlider.type = 'range'
 soliditySlider.min = '1'
-soliditySlider.max = '100'
-soliditySlider.value = '25'
+soliditySlider.max = '500'  // Changed from 100 to 500
+soliditySlider.value = '500' // Changed from 25 to 500
 
 fullnessSlider.type = 'range'
 fullnessSlider.min = '10'
@@ -207,7 +210,8 @@ controls.append(
     addRandomAntBtn, 
     toggleGoLBtn,
     toggleStructuresBtn,
-    toggleLifecycleBtn
+    toggleLifecycleBtn,
+    toggleGridBtn // Add the grid toggle button to controls
 )
 
 // Create separate container for sliders
@@ -286,12 +290,40 @@ function drawGrid() {
                         ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`
                     }
                 } else {
-                    ctx.fillStyle = '#ffffff' // Changed: white for normal live cells
+                    ctx.fillStyle = '#ffffff' // White for normal live cells
                 }
             } else {
                 ctx.fillStyle = '#111827' // Dead cell color
             }
-            ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1)
+            
+            // Draw cell with or without gap based on grid visibility
+            if (showGrid) {
+                ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1)
+            } else {
+                ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize)
+            }
+        }
+    }
+
+    // Draw grid lines explicitly if grid is visible
+    if (showGrid) {
+        ctx.strokeStyle = '#333333'; // Dark gray grid lines
+        ctx.lineWidth = 0.5;
+        
+        // Draw vertical grid lines
+        for (let x = 0; x <= board.width; x++) {
+            ctx.beginPath();
+            ctx.moveTo(x * cellSize, 0);
+            ctx.lineTo(x * cellSize, board.height * cellSize);
+            ctx.stroke();
+        }
+        
+        // Draw horizontal grid lines
+        for (let y = 0; y <= board.height; y++) {
+            ctx.beginPath();
+            ctx.moveTo(0, y * cellSize);
+            ctx.lineTo(board.width * cellSize, y * cellSize);
+            ctx.stroke();
         }
     }
 
@@ -773,6 +805,12 @@ toggleLifecycleBtn.addEventListener('click', () => {
     drawGrid()
 })
 
+toggleGridBtn.addEventListener('click', () => {
+    showGrid = !showGrid;
+    toggleGridBtn.textContent = `Grid: ${showGrid ? 'ON' : 'OFF'}`;
+    drawGrid();
+});
+
 widthInput.addEventListener('change', (e) => {
     const value = Math.max(1, parseInt((e.target as HTMLInputElement).value) || 25)
     widthSlider.value = Math.min(Math.max(value, parseInt(widthSlider.min)), parseInt(widthSlider.max)).toString()
@@ -926,7 +964,11 @@ genCounter.style.margin = '0.5rem 0'
 resizeCanvas()
 
 // Add button styling to prevent size changes
-const buttons = [playBtn, stepBtn, clearBtn, randomBtn, antModeBtn, addRandomAntBtn, toggleGoLBtn, toggleStructuresBtn, toggleLifecycleBtn]
+const buttons = [
+    playBtn, stepBtn, clearBtn, randomBtn, antModeBtn, 
+    addRandomAntBtn, toggleGoLBtn, toggleStructuresBtn, 
+    toggleLifecycleBtn, toggleGridBtn // Add toggleGridBtn to the list
+]
 buttons.forEach(btn => {
     btn.style.minWidth = '100px'
     btn.style.minHeight = '60px'
