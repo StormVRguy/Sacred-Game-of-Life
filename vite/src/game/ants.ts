@@ -33,7 +33,13 @@ function moveForward(ant: Ant, board: Board) {
     }
 }
 
-export function stepAnts(board: Board, ants: Ant[], structuresEnabled: boolean = false, solidity: number = 0) {
+export function stepAnts(
+    board: Board, 
+    ants: Ant[], 
+    useStructures: boolean = false, 
+    maxStructureSolidity: number = 100,
+    maxInitialSolidity: number = 100
+): void {
     for (const ant of ants) {
         if (ant.x < 0 || ant.x >= board.width || ant.y < 0 || ant.y >= board.height) continue;
         
@@ -48,8 +54,8 @@ export function stepAnts(board: Board, ants: Ant[], structuresEnabled: boolean =
 
         // Flip the cell state
         const newValue = currentCell.value === 1 ? 0 : 1;
-        if (structuresEnabled && newValue === 1) {
-            setCell(board, ant.x, ant.y, newValue, ant.color, solidity);
+        if (useStructures && newValue === 1) {
+            setCell(board, ant.x, ant.y, newValue, ant.color, maxInitialSolidity);
         } else {
             setCell(board, ant.x, ant.y, newValue, null, 0);
         }

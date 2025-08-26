@@ -28,6 +28,7 @@ let isDragging = false
 
 // Structures state
 let structuresEnabled = true  // Changed from false to true
+let maxSolidity = 100        // Add new variable for maximum solidity
 
 // Lifecycle state
 let lifecycleEnabled = true   // Changed from false to true
@@ -60,6 +61,8 @@ const fullnessLabel = document.createElement('label')
 const fullnessSlider = document.createElement('input')
 const lifeDurationLabel = document.createElement('label')
 const lifeDurationSlider = document.createElement('input')
+const maxSolidityLabel = document.createElement('label')  // New label for max solidity
+const maxSoliditySlider = document.createElement('input') // New slider for max solidity
 const genCounter = document.createElement('div')
 const canvas = document.createElement('canvas')
 const gridControls = document.createElement('div')
@@ -90,6 +93,7 @@ const heightInput = document.createElement('input')
 const speedNumberInput = document.createElement('input')
 const fullnessInput = document.createElement('input')
 const lifeDurationInput = document.createElement('input')
+const maxSolidityInput = document.createElement('input')  // New input for max solidity
 
 // Configure number inputs
 const configureNumberInput = (input: HTMLInputElement) => {
@@ -108,6 +112,7 @@ configureNumberInput(heightInput)
 configureNumberInput(speedNumberInput)
 configureNumberInput(fullnessInput)
 configureNumberInput(lifeDurationInput)
+configureNumberInput(maxSolidityInput)  // Configure the new input
 
 // Set initial values
 widthInput.value = gridWidth.toString()
@@ -115,6 +120,7 @@ heightInput.value = gridHeight.toString()
 speedNumberInput.value = '20'
 fullnessInput.value = maxFullness.toString()
 lifeDurationInput.value = maxLifeDuration.toString()
+maxSolidityInput.value = maxSolidity.toString()  // Set initial value for max solidity
 
 container.style.display = 'flex'
 container.style.flexDirection = 'column'
@@ -170,10 +176,16 @@ lifeDurationSlider.min = '20'
 lifeDurationSlider.max = '500'
 lifeDurationSlider.value = maxLifeDuration.toString()
 
+maxSoliditySlider.type = 'range'  // Configure max solidity slider
+maxSoliditySlider.min = '10'
+maxSoliditySlider.max = '200'
+maxSoliditySlider.value = maxSolidity.toString()
+
 // Update labels, simplify them
 speedLabel.textContent = 'Speed (ms): '
 fullnessLabel.textContent = 'Max Fullness: '
 lifeDurationLabel.textContent = 'Life Duration: '
+maxSolidityLabel.textContent = 'Max Solidity: '  // Set label text
 
 // Update container appending with correct order - keep only one input per slider
 widthContainer.innerHTML = '';
@@ -182,7 +194,7 @@ widthContainer.append(widthLabel, widthSlider, widthInput)
 heightContainer.innerHTML = '';
 heightContainer.append(heightLabel, heightSlider, heightInput)
 
-// Create containers for speed and solidity sliders with the same layout
+// Create containers for speed and sliders with the same layout
 const speedContainer = document.createElement('div')
 speedContainer.className = 'slider-container'
 speedContainer.append(speedLabel, speedInput, speedNumberInput)
@@ -194,6 +206,10 @@ fullnessContainer.append(fullnessLabel, fullnessSlider, fullnessInput)
 const lifeDurationContainer = document.createElement('div')
 lifeDurationContainer.className = 'slider-container'
 lifeDurationContainer.append(lifeDurationLabel, lifeDurationSlider, lifeDurationInput)
+
+const maxSolidityContainer = document.createElement('div')  // Create container for max solidity
+maxSolidityContainer.className = 'slider-container'
+maxSolidityContainer.append(maxSolidityLabel, maxSoliditySlider, maxSolidityInput)
 
 gridControls.append(widthContainer, heightContainer)
 
@@ -223,7 +239,7 @@ slidersContainer.style.justifyContent = 'center'
 slidersContainer.style.width = '100%'
 slidersContainer.style.margin = '0.5rem 0'
 
-slidersContainer.append(speedContainer, fullnessContainer, lifeDurationContainer)
+slidersContainer.append(speedContainer, fullnessContainer, lifeDurationContainer, maxSolidityContainer)  // Add the new container
 container.append(title, controls, gridControls, slidersContainer, genCounter, gameContainer)
 app.innerHTML = ''
 app.appendChild(container)
@@ -272,8 +288,8 @@ function drawGrid() {
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg') || '#242424'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // Update to use lifeDurationInput.value instead of solidityInput.value
-    const maxSolidity = parseInt(lifeDurationInput.value)
+    // Get max solidity from the new input
+    const displayMaxSolidity = parseInt(lifeDurationInput.value)
 
     for (let y = 0; y < board.height; y++) {
         for (let x = 0; x < board.width; x++) {
@@ -282,7 +298,7 @@ function drawGrid() {
                 if (cell.color && cell.solidity > 0) {
                     // Calculate progress from 1 (new cell) to 0 (old cell)
                     // This is a normalized value that represents the cell's life progress
-                    const normalProgress = cell.solidity / maxSolidity;
+                    const normalProgress = cell.solidity / displayMaxSolidity;
                     
                     // Handle different color modes
                     if (revertColors && structuresEnabled) {
@@ -701,8 +717,8 @@ function setRunning(next: boolean) {
                             return { ant, state: board.grid[y][x].value };
                         });
                         
-                        // Call the imported stepAnts function - update to use lifeDurationInput.value
-                        stepAnts(board, ants, structuresEnabled, parseInt(lifeDurationInput.value))
+                        // Update to pass maxSolidity from the input
+                        stepAnts(board, ants, structuresEnabled, parseInt(lifeDurationInput.value), parseInt(maxSolidityInput.value))
                         
                         // Check for conflicts after movement
                         checkAntConflicts();
@@ -787,8 +803,8 @@ function stepOnce() {
                     return { ant, state: board.grid[y][x].value };
                 });
                 
-                // Call the imported stepAnts function - update to use lifeDurationInput.value
-                stepAnts(board, ants, structuresEnabled, parseInt(lifeDurationInput.value))
+                // Update to pass maxSolidity from the input
+                stepAnts(board, ants, structuresEnabled, parseInt(lifeDurationInput.value), parseInt(maxSolidityInput.value))
                 
                 // Check for conflicts after movement
                 checkAntConflicts();
@@ -1005,6 +1021,18 @@ lifeDurationInput.addEventListener('change', (e) => {
     const value = Math.max(20, parseInt((e.target as HTMLInputElement).value) || 100)
     lifeDurationSlider.value = Math.min(Math.max(value, parseInt(lifeDurationSlider.min)), parseInt(lifeDurationSlider.max)).toString()
     maxLifeDuration = value
+})
+
+// Add max solidity slider event listeners
+maxSoliditySlider.addEventListener('input', (e) => {
+    maxSolidityInput.value = (e.target as HTMLInputElement).value
+    maxSolidity = parseInt(maxSolidityInput.value)
+})
+
+maxSolidityInput.addEventListener('change', (e) => {
+    const value = Math.max(10, parseInt((e.target as HTMLInputElement).value) || 100)
+    maxSoliditySlider.value = Math.min(Math.max(value, parseInt(maxSoliditySlider.min)), parseInt(maxSoliditySlider.max)).toString()
+    maxSolidity = value
 })
 
 // Update existing slider event listeners to sync with number inputs - simplified
