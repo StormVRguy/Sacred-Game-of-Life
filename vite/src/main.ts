@@ -49,6 +49,18 @@ const genCounter = document.createElement('div')
 const canvas = document.createElement('canvas')
 const gridControls = document.createElement('div')
 
+// Initialize button text content
+playBtn.textContent = 'Play'
+stepBtn.textContent = 'Step'
+clearBtn.textContent = 'Clear'
+randomBtn.textContent = 'Random'
+antModeBtn.textContent = 'Remove Ants'
+addRandomAntBtn.textContent = 'Add Random Ant'
+toggleGoLBtn.textContent = `GoL: ${golEnabled ? 'ON' : 'OFF'}`
+toggleStructuresBtn.textContent = `Structures: ${structuresEnabled ? 'ON' : 'OFF'}`
+title.textContent = 'Sacred Game of Life'
+genCounter.textContent = `Generation: ${generation}`
+
 // Before creating the sliders, add number input fields
 const widthInput = document.createElement('input')
 const heightInput = document.createElement('input')
@@ -116,26 +128,36 @@ heightSlider.max = '150'  // Changed from 2000
 widthSlider.value = gridWidth.toString()
 heightSlider.value = gridHeight.toString()
 
-const widthValue = document.createElement('span')
-const heightValue = document.createElement('span')
-widthValue.textContent = gridWidth.toString()
-heightValue.textContent = gridHeight.toString()
+// Configure sliders
+speedInput.type = 'range'
+speedInput.min = '1'
+speedInput.max = '200'
+speedInput.value = '20'
 
-// Update labels and values
+soliditySlider.type = 'range'
+soliditySlider.min = '1'
+soliditySlider.max = '100'
+soliditySlider.value = '25'
+
+// Update labels, simplify them
 speedLabel.textContent = 'Speed (ms): '
-const speedValue = document.createElement('span')
-speedValue.textContent = speedInput.value
-speedValue.style.minWidth = '3ch'
-
 solidityLabel.textContent = 'Structure Solidity: '
-solidityValue.textContent = soliditySlider.value
-solidityValue.style.minWidth = '3ch'
 
-// Update container appending with correct order
-widthContainer.append(widthLabel, widthSlider, widthValue, widthInput)
-heightContainer.append(heightLabel, heightSlider, heightValue, heightInput)
-speedLabel.append(speedLabel.textContent, speedInput, speedValue, speedNumberInput)
-solidityLabel.append(solidityLabel.textContent, soliditySlider, solidityValue, solidityInput)
+// Update container appending with correct order - keep only one input per slider
+widthContainer.innerHTML = '';
+widthContainer.append(widthLabel, widthSlider, widthInput)
+
+heightContainer.innerHTML = '';
+heightContainer.append(heightLabel, heightSlider, heightInput)
+
+// Create containers for speed and solidity sliders with the same layout
+const speedContainer = document.createElement('div')
+speedContainer.className = 'slider-container'
+speedContainer.append(speedLabel, speedInput, speedNumberInput)
+
+const solidityContainer = document.createElement('div')
+solidityContainer.className = 'slider-container'
+solidityContainer.append(solidityLabel, soliditySlider, solidityInput)
 
 gridControls.append(widthContainer, heightContainer)
 
@@ -160,7 +182,7 @@ slidersContainer.style.justifyContent = 'center'
 slidersContainer.style.width = '100%'
 slidersContainer.style.margin = '0.5rem 0'
 
-slidersContainer.append(speedLabel, solidityLabel)
+slidersContainer.append(speedContainer, solidityContainer)
 container.append(title, controls, gridControls, slidersContainer, genCounter, canvas)
 app.innerHTML = ''
 app.appendChild(container)
@@ -169,12 +191,6 @@ app.appendChild(container)
 canvas.width = gridWidth * cellSize
 canvas.height = gridHeight * cellSize
 const ctx = canvas.getContext('2d')!
-
-// Initialize slider values after their creation
-widthSlider.value = gridWidth.toString()
-heightSlider.value = gridHeight.toString()
-widthValue.textContent = gridWidth.toString()
-heightValue.textContent = gridHeight.toString()
 
 function nextDistinctColor(): string {
 	const hue = nextHue % 360
@@ -186,7 +202,7 @@ function drawGrid() {
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg') || '#242424'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    const maxSolidity = parseInt(soliditySlider.value)
+    const maxSolidity = parseInt(solidityInput.value)
 
     for (let y = 0; y < board.height; y++) {
         for (let x = 0; x < board.width; x++) {
@@ -229,7 +245,7 @@ function setRunning(next: boolean) {
         timer = null
     }
     if (running) {
-        const interval = Number(speedInput.value)
+        const interval = Number(speedNumberInput.value)
         timer = window.setInterval(() => {
             switch (stepPhase) {
                 case 0:
@@ -241,7 +257,7 @@ function setRunning(next: boolean) {
                     break
                 case 1:
                     if (ants.length > 0) {
-                        stepAnts(board, ants, structuresEnabled, parseInt(soliditySlider.value))
+                        stepAnts(board, ants, structuresEnabled, parseInt(solidityInput.value))
                     }
                     stepPhase = 0
                     generation += 1
@@ -265,7 +281,7 @@ function stepOnce() {
         case 1: // Ants phase (movement and cell flipping combined)
             if (ants.length > 0) {
                 // Pass structures parameters
-                stepAnts(board, ants, structuresEnabled, parseInt(soliditySlider.value))
+                stepAnts(board, ants, structuresEnabled, parseInt(solidityInput.value))
             }
             stepPhase = 0
             generation += 1
@@ -347,55 +363,43 @@ toggleStructuresBtn.addEventListener('click', () => {
 
 widthInput.addEventListener('change', (e) => {
     const value = Math.max(1, parseInt((e.target as HTMLInputElement).value) || 25)
-    widthValue.textContent = value.toString()
     widthSlider.value = Math.min(Math.max(value, parseInt(widthSlider.min)), parseInt(widthSlider.max)).toString()
     handleGridResize()
 })
 
 heightInput.addEventListener('change', (e) => {
     const value = Math.max(1, parseInt((e.target as HTMLInputElement).value) || 25)
-    heightValue.textContent = value.toString()
     heightSlider.value = Math.min(Math.max(value, parseInt(heightSlider.min)), parseInt(heightSlider.max)).toString()
     handleGridResize()
 })
 
 speedNumberInput.addEventListener('change', (e) => {
     const value = Math.max(1, parseInt((e.target as HTMLInputElement).value) || 20)
-    speedValue.textContent = value.toString()
     speedInput.value = Math.min(Math.max(value, parseInt(speedInput.min)), parseInt(speedInput.max)).toString()
     if (running) setRunning(true)
 })
 
 solidityInput.addEventListener('change', (e) => {
     const value = Math.max(1, parseInt((e.target as HTMLInputElement).value) || 25)
-    solidityValue.textContent = value.toString()
     soliditySlider.value = Math.min(Math.max(value, parseInt(soliditySlider.min)), parseInt(soliditySlider.max)).toString()
 })
 
-// Update existing slider event listeners to sync with number inputs
+// Update existing slider event listeners to sync with number inputs - simplified
 widthSlider.addEventListener('input', (e) => {
-    const value = (e.target as HTMLInputElement).value
-    widthValue.textContent = value
-    widthInput.value = value
+    widthInput.value = (e.target as HTMLInputElement).value
 })
 
 heightSlider.addEventListener('input', (e) => {
-    const value = (e.target as HTMLInputElement).value
-    heightValue.textContent = value
-    heightInput.value = value
+    heightInput.value = (e.target as HTMLInputElement).value
 })
 
 speedInput.addEventListener('input', (e) => {
-    const value = (e.target as HTMLInputElement).value
-    speedValue.textContent = value
-    speedNumberInput.value = value
+    speedNumberInput.value = (e.target as HTMLInputElement).value
     if (running) setRunning(true)
 })
 
 soliditySlider.addEventListener('input', (e) => {
-    const value = (e.target as HTMLInputElement).value
-    solidityValue.textContent = value
-    solidityInput.value = value
+    solidityInput.value = (e.target as HTMLInputElement).value
 })
 
 canvas.addEventListener('mousedown', (e) => {
@@ -430,8 +434,8 @@ function handleCanvasPointer(e: MouseEvent) {
 
 // Add resize handling
 function handleGridResize() {
-    const newWidth = parseInt(widthSlider.value)
-    const newHeight = parseInt(heightSlider.value)
+    const newWidth = parseInt(widthInput.value)
+    const newHeight = parseInt(heightInput.value)
     
     // Create new board with current content
     const newBoard = createBoard(newWidth, newHeight, 0)
@@ -456,18 +460,6 @@ function handleGridResize() {
     drawGrid()
 }
 
-// Add event listeners
-widthSlider.addEventListener('input', (e) => {
-    widthValue.textContent = (e.target as HTMLInputElement).value
-})
-
-heightSlider.addEventListener('input', (e) => {
-    heightValue.textContent = (e.target as HTMLInputElement).value
-})
-
-widthSlider.addEventListener('change', handleGridResize)
-heightSlider.addEventListener('change', handleGridResize)
-
 // Update the resizeCanvas function
 function resizeCanvas() {
     const maxWidth = Math.min(window.innerWidth - 40, board.width * cellSize)
@@ -489,13 +481,6 @@ title.style.margin = '0'
 title.style.textAlign = 'center'
 title.style.fontSize = 'clamp(1.5rem, 4vw, 2rem)'
 
-// Update speed control styling
-speedLabel.style.display = 'flex'
-speedLabel.style.alignItems = 'center'
-speedLabel.style.gap = '0.5rem'
-speedInput.style.width = '150px'
-speedValue.style.minWidth = '3ch'
-
 // Update generation counter styling
 genCounter.style.textAlign = 'center'
 genCounter.style.fontSize = '1rem'
@@ -508,6 +493,20 @@ resizeCanvas()
 const buttons = [playBtn, stepBtn, clearBtn, randomBtn, antModeBtn, addRandomAntBtn, toggleGoLBtn, toggleStructuresBtn]
 buttons.forEach(btn => {
     btn.style.minWidth = '100px'
+    btn.style.minHeight = '60px'
+    btn.style.padding = '0.5rem 1rem'
+    btn.style.border = '1px solid #666'
+    btn.style.borderRadius = '4px'
+    btn.style.backgroundColor = '#333'
+    btn.style.color = '#fff'
+    btn.style.cursor = 'pointer'
+    btn.style.fontFamily = 'inherit'
+    btn.style.fontSize = '14px'
+    btn.style.lineHeight = '1.2'
+})
+buttons.forEach(btn => {
+    btn.style.minWidth = '100px'
+    btn.style.minHeight = '60px'
     btn.style.padding = '0.5rem 1rem'
     btn.style.border = '1px solid #666'
     btn.style.borderRadius = '4px'
