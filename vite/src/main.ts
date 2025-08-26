@@ -50,7 +50,6 @@ const speedLabel = document.createElement('label')
 const speedInput = document.createElement('input')
 const solidityLabel = document.createElement('label')
 const soliditySlider = document.createElement('input')
-const solidityValue = document.createElement('span')
 const fullnessLabel = document.createElement('label')
 const fullnessSlider = document.createElement('input')
 const lifeDurationLabel = document.createElement('label')
@@ -257,8 +256,8 @@ function addAntAt(x: number, y: number, dir: Direction = 'N') {
 }
 
 function addRandomAnt() {
-	const x = Math.floor(Math.random() * gridWidth)
-	const y = Math.floor(Math.random() * gridHeight)
+	const x = Math.floor(Math.random() * board.width)
+	const y = Math.floor(Math.random() * board.height)
 	const dirs: Direction[] = ['N', 'E', 'S', 'W']
 	const dir = dirs[Math.floor(Math.random() * dirs.length)]
 	addAntAt(x, y, dir)
@@ -435,15 +434,19 @@ function checkAntReproduction(ant: ExtendedAnt) {
                 Math.min(2, adjacentPositions.length) : 
                 Math.min(1, adjacentPositions.length);
             
+            // Mutations only happen for single offspring, not when producing 2 offspring
+            const hasMutation = numNewAnts === 1 && Math.random() < 0.1;
+            
             for (let i = 0; i < numNewAnts; i++) {
                 const pos = adjacentPositions[i];
+                // Make sure positions are within the current board dimensions
+                if (pos.x < 0 || pos.x >= board.width || pos.y < 0 || pos.y >= board.height) continue;
+                
                 const dirs: Direction[] = ['N', 'E', 'S', 'W'];
                 const dir = dirs[Math.floor(Math.random() * dirs.length)];
                 
-                // Determine if this offspring will have a mutation (5% chance)
-                const hasMutation = Math.random() < 0.05;
-                
                 // Set the color - either parent's color or a new random color if mutation occurs
+                // Note: hasMutation is already false when creating 2 offspring
                 const color = hasMutation ? nextDistinctColor() : ant.color;
                 
                 // Create ant
