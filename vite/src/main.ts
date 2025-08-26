@@ -13,6 +13,9 @@ let running = false
 let timer: number | null = null
 let generation = 0
 let showGrid = false // New state variable to track grid visibility
+let showAntsTable = false // New state variable to track ants table visibility
+let colorSupremacy = false // New state variable for Color Supremacy mode
+let revertColors = false // New state variable for Revert Colors mode
 
 // Ants state
 let ants: Ant[] = []
@@ -48,10 +51,11 @@ const toggleGoLBtn = document.createElement('button')
 const toggleStructuresBtn = document.createElement('button')
 const toggleLifecycleBtn = document.createElement('button')
 const toggleGridBtn = document.createElement('button') // New button for grid visibility
+const toggleAntsTableBtn = document.createElement('button') // New button for ants table visibility
+const toggleColorSupremacyBtn = document.createElement('button') // New button for Color Supremacy mode
+const toggleRevertColorsBtn = document.createElement('button') // New button for Revert Colors mode
 const speedLabel = document.createElement('label')
 const speedInput = document.createElement('input')
-const solidityLabel = document.createElement('label')
-const soliditySlider = document.createElement('input')
 const fullnessLabel = document.createElement('label')
 const fullnessSlider = document.createElement('input')
 const lifeDurationLabel = document.createElement('label')
@@ -59,6 +63,9 @@ const lifeDurationSlider = document.createElement('input')
 const genCounter = document.createElement('div')
 const canvas = document.createElement('canvas')
 const gridControls = document.createElement('div')
+const gameContainer = document.createElement('div') // Container for game elements (canvas + table)
+const antsTableContainer = document.createElement('div') // Container for ants table
+const antsTable = document.createElement('table') // Table for displaying ants
 
 // Initialize button text content
 playBtn.textContent = 'Play'
@@ -71,6 +78,9 @@ toggleGoLBtn.textContent = `GoL: ${golEnabled ? 'ON' : 'OFF'}`
 toggleStructuresBtn.textContent = `Structures: ${structuresEnabled ? 'ON' : 'OFF'}`
 toggleLifecycleBtn.textContent = `Ants Lifecycle: ${lifecycleEnabled ? 'ON' : 'OFF'}`
 toggleGridBtn.textContent = `Grid: ${showGrid ? 'ON' : 'OFF'}` // Initialize grid toggle button
+toggleAntsTableBtn.textContent = `Show Ants Table: ${showAntsTable ? 'ON' : 'OFF'}` // Initialize ants table toggle button
+toggleColorSupremacyBtn.textContent = `Color Supremacy: ${colorSupremacy ? 'ON' : 'OFF'}` // Initialize Color Supremacy button
+toggleRevertColorsBtn.textContent = `Revert Colors: ${revertColors ? 'ON' : 'OFF'}` // Initialize Revert Colors button
 title.textContent = 'Sacred Game of Life'
 genCounter.textContent = `Generation: ${generation}`
 
@@ -78,7 +88,6 @@ genCounter.textContent = `Generation: ${generation}`
 const widthInput = document.createElement('input')
 const heightInput = document.createElement('input')
 const speedNumberInput = document.createElement('input')
-const solidityInput = document.createElement('input')
 const fullnessInput = document.createElement('input')
 const lifeDurationInput = document.createElement('input')
 
@@ -97,7 +106,6 @@ const configureNumberInput = (input: HTMLInputElement) => {
 configureNumberInput(widthInput)
 configureNumberInput(heightInput)
 configureNumberInput(speedNumberInput)
-configureNumberInput(solidityInput)
 configureNumberInput(fullnessInput)
 configureNumberInput(lifeDurationInput)
 
@@ -105,7 +113,6 @@ configureNumberInput(lifeDurationInput)
 widthInput.value = gridWidth.toString()
 heightInput.value = gridHeight.toString()
 speedNumberInput.value = '20'
-solidityInput.value = '500'  // Changed from 25 to 500
 fullnessInput.value = maxFullness.toString()
 lifeDurationInput.value = maxLifeDuration.toString()
 
@@ -153,11 +160,6 @@ speedInput.min = '1'
 speedInput.max = '200'
 speedInput.value = '20'
 
-soliditySlider.type = 'range'
-soliditySlider.min = '1'
-soliditySlider.max = '500'  // Changed from 100 to 500
-soliditySlider.value = '500' // Changed from 25 to 500
-
 fullnessSlider.type = 'range'
 fullnessSlider.min = '10'
 fullnessSlider.max = '200'
@@ -170,7 +172,6 @@ lifeDurationSlider.value = maxLifeDuration.toString()
 
 // Update labels, simplify them
 speedLabel.textContent = 'Speed (ms): '
-solidityLabel.textContent = 'Structure Solidity: '
 fullnessLabel.textContent = 'Max Fullness: '
 lifeDurationLabel.textContent = 'Life Duration: '
 
@@ -185,10 +186,6 @@ heightContainer.append(heightLabel, heightSlider, heightInput)
 const speedContainer = document.createElement('div')
 speedContainer.className = 'slider-container'
 speedContainer.append(speedLabel, speedInput, speedNumberInput)
-
-const solidityContainer = document.createElement('div')
-solidityContainer.className = 'slider-container'
-solidityContainer.append(solidityLabel, soliditySlider, solidityInput)
 
 const fullnessContainer = document.createElement('div')
 fullnessContainer.className = 'slider-container'
@@ -211,7 +208,10 @@ controls.append(
     toggleGoLBtn,
     toggleStructuresBtn,
     toggleLifecycleBtn,
-    toggleGridBtn // Add the grid toggle button to controls
+    toggleGridBtn,
+    toggleAntsTableBtn,
+    toggleColorSupremacyBtn,
+    toggleRevertColorsBtn // Add the Revert Colors toggle button
 )
 
 // Create separate container for sliders
@@ -223,8 +223,8 @@ slidersContainer.style.justifyContent = 'center'
 slidersContainer.style.width = '100%'
 slidersContainer.style.margin = '0.5rem 0'
 
-slidersContainer.append(speedContainer, solidityContainer, fullnessContainer, lifeDurationContainer)
-container.append(title, controls, gridControls, slidersContainer, genCounter, canvas)
+slidersContainer.append(speedContainer, fullnessContainer, lifeDurationContainer)
+container.append(title, controls, gridControls, slidersContainer, genCounter, gameContainer)
 app.innerHTML = ''
 app.appendChild(container)
 
@@ -257,6 +257,7 @@ function addAntAt(x: number, y: number, dir: Direction = 'N') {
     ants.push(ant)
     antModeBtn.disabled = false // Enable button when we have ants
     drawGrid()
+    updateAntsTable() // Update ants table when adding a new ant
 }
 
 function addRandomAnt() {
@@ -271,23 +272,53 @@ function drawGrid() {
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg') || '#242424'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    const maxSolidity = parseInt(solidityInput.value)
+    // Update to use lifeDurationInput.value instead of solidityInput.value
+    const maxSolidity = parseInt(lifeDurationInput.value)
 
     for (let y = 0; y < board.height; y++) {
         for (let x = 0; x < board.width; x++) {
             const cell = board.grid[y][x]
             if (cell.value === 1) {
                 if (cell.color && cell.solidity > 0) {
-                    // Linear interpolation from ant color to white based on solidity
+                    // Get progress from 0 (fresh cell) to 1 (about to die)
                     const progress = cell.solidity / maxSolidity
-                    const hslMatch = cell.color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/)
-                    if (hslMatch) {
-                        const [_, h, s, l] = hslMatch.map(Number)
-                        // Linear interpolation of saturation (from original to 0%)
-                        // and lightness (from original to 100%)
-                        const newSat = s * progress
-                        const newLight = l + (100 - l) * (1 - progress)
-                        ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`
+                    
+                    // Handle different color modes
+                    if (revertColors && structuresEnabled) {
+                        // Revert Colors mode: black -> ant color -> white
+                        const hslMatch = cell.color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/)
+                        if (hslMatch) {
+                            const [_, h, s, l] = hslMatch.map(Number)
+                            
+                            if (progress < 0.5) {
+                                // First half: black to ant color (normalized progress from 0->1)
+                                const phase1Progress = progress * 2; // 0->1 across first half
+                                const newSat = s * phase1Progress;
+                                const newLight = l * phase1Progress;
+                                ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`
+                            } else {
+                                // Second half: ant color to white (normalized progress from 0->1)
+                                const phase2Progress = (progress - 0.5) * 2; // 0->1 across second half
+                                // Linear interpolation from ant color to white
+                                const newSat = s * (1 - phase2Progress);
+                                const newLight = l + (100 - l) * phase2Progress;
+                                ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`
+                            }
+                        } else {
+                            // Fallback if color parsing fails
+                            ctx.fillStyle = '#ffffff';
+                        }
+                    } else {
+                        // Original mode: ant color to white
+                        const hslMatch = cell.color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/)
+                        if (hslMatch) {
+                            const [_, h, s, l] = hslMatch.map(Number)
+                            // Linear interpolation of saturation (from original to 0%)
+                            // and lightness (from original to 100%)
+                            const newSat = s * progress
+                            const newLight = l + (100 - l) * (1 - progress)
+                            ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`
+                        }
                     }
                 } else {
                     ctx.fillStyle = '#ffffff' // White for normal live cells
@@ -364,13 +395,64 @@ function drawGrid() {
     }
 }
 
-// Improved helper function to release all cells owned by an ant
+// Function to check if any ants of a given color exist in the game
+function antsOfColorExist(color: string): boolean {
+    // Make sure we don't count the ant that's being removed
+    return ants.some(ant => ant.color === color);
+}
+
+// Add a new function to check for extinct colors and clean up their cells
+function cleanupExtinctColors() {
+    if (!colorSupremacy || !structuresEnabled) return;
+    
+    // Collect all active ant colors
+    const activeColors = new Set<string>();
+    ants.forEach(ant => activeColors.add(ant.color));
+    
+    // Find cells with colors that aren't in the active colors set
+    for (let y = 0; y < board.height; y++) {
+        for (let x = 0; x < board.width; x++) {
+            const cell = board.grid[y][x];
+            if (cell.color && !activeColors.has(cell.color)) {
+                // This color is extinct - reset the cell
+                cell.solidity = 0;
+                cell.color = null;
+            }
+        }
+    }
+}
+
+// Modified helper function to release all cells owned by an ant, respecting Color Supremacy mode
 function releaseAntCells(ant: ExtendedAnt) {
     if (!ant.ownedCells || ant.ownedCells.length === 0) return;
     
     // Force a scan of the entire board to find cells with this ant's color
     if (structuresEnabled) {
         const antColor = ant.color;
+        
+        // In Color Supremacy mode, don't clear cells belonging to the color
+        // that still has other ants alive
+        if (colorSupremacy) {
+            // First, remove this ant from the array to check if others of this color exist
+            const antIndex = ants.indexOf(ant);
+            if (antIndex !== -1) {
+                const tempAnt = ants.splice(antIndex, 1)[0];
+                
+                // Now check if any other ants of this color remain
+                const othersExist = antsOfColorExist(antColor);
+                
+                // Put the ant back (we'll remove it properly later)
+                ants.splice(antIndex, 0, tempAnt);
+                
+                if (othersExist) {
+                    // If other ants of this color still exist, only clear this specific ant's owned cells array
+                    ant.ownedCells = [];
+                    return;
+                }
+            }
+        }
+        
+        // If we're here, either Color Supremacy is off or this was the last ant of its color
         
         // First pass - reset any cell that matches the ant's color
         for (let y = 0; y < board.height; y++) {
@@ -580,6 +662,9 @@ function setRunning(next: boolean) {
                     if (golEnabled) {
                         board = nextGeneration(board)
                     }
+                    if (colorSupremacy) {
+                        cleanupExtinctColors();  // Check for extinct colors at the end of each GOL phase
+                    }
                     stepPhase = 1
                     break
                 case 1:
@@ -598,8 +683,8 @@ function setRunning(next: boolean) {
                             return { ant, state: board.grid[y][x].value };
                         });
                         
-                        // Call the imported stepAnts function
-                        stepAnts(board, ants, structuresEnabled, parseInt(solidityInput.value))
+                        // Call the imported stepAnts function - update to use lifeDurationInput.value
+                        stepAnts(board, ants, structuresEnabled, parseInt(lifeDurationInput.value))
                         
                         // Check for conflicts after movement
                         checkAntConflicts();
@@ -644,10 +729,14 @@ function setRunning(next: boolean) {
                     }
                     stepPhase = 0
                     generation += 1
+                    if (colorSupremacy) {
+                        cleanupExtinctColors();  // Check for extinct colors at the end of each ant movement phase
+                    }
                     break
             }
             genCounter.textContent = `Generation: ${generation}`
             drawGrid()
+            updateAntsTable() // Update ants table on each step
         }, interval / 2)
     }
 }
@@ -658,6 +747,9 @@ function stepOnce() {
             board = reduceSolidity(board)
             if (golEnabled) {
                 board = nextGeneration(board)
+            }
+            if (colorSupremacy) {
+                cleanupExtinctColors();  // Check for extinct colors at the end of each GOL phase
             }
             stepPhase = 1
             break
@@ -677,8 +769,8 @@ function stepOnce() {
                     return { ant, state: board.grid[y][x].value };
                 });
                 
-                // Call the imported stepAnts function
-                stepAnts(board, ants, structuresEnabled, parseInt(solidityInput.value))
+                // Call the imported stepAnts function - update to use lifeDurationInput.value
+                stepAnts(board, ants, structuresEnabled, parseInt(lifeDurationInput.value))
                 
                 // Check for conflicts after movement
                 checkAntConflicts();
@@ -723,10 +815,14 @@ function stepOnce() {
             }
             stepPhase = 0
             generation += 1
+            if (colorSupremacy) {
+                cleanupExtinctColors();  // Check for extinct colors at the end of each ant movement phase
+            }
             break
     }
     genCounter.textContent = `Generation: ${generation}`
     drawGrid()
+    updateAntsTable() // Update ants table after each step
 }
 
 function clearAll() {
@@ -736,6 +832,7 @@ function clearAll() {
     generation = 0
     genCounter.textContent = `Generation: ${generation}`
     drawGrid()
+    updateAntsTable() // Update ants table when clearing all
 }
 
 function randomize(density = 0.25) {
@@ -758,6 +855,7 @@ antModeBtn.addEventListener('click', () => {
     ants = [] // Remove all ants
     antModeBtn.disabled = true
     drawGrid()
+    updateAntsTable() // Update ants table when removing all ants
 })
 
 addRandomAntBtn.addEventListener('click', () => {
@@ -770,6 +868,13 @@ toggleGoLBtn.addEventListener('click', () => {
 toggleStructuresBtn.addEventListener('click', () => {
     structuresEnabled = !structuresEnabled
     toggleStructuresBtn.textContent = `Structures: ${structuresEnabled ? 'ON' : 'OFF'}`
+    
+    // Update Revert Colors button state based on Structures mode
+    toggleRevertColorsBtn.disabled = !structuresEnabled;
+    if (!structuresEnabled && revertColors) {
+        revertColors = false;
+        toggleRevertColorsBtn.textContent = `Revert Colors: OFF`;
+    }
     
     if (!structuresEnabled) {
         lifecycleEnabled = false
@@ -811,6 +916,37 @@ toggleGridBtn.addEventListener('click', () => {
     drawGrid();
 });
 
+// Add ants table toggle event listener
+toggleAntsTableBtn.addEventListener('click', () => {
+    showAntsTable = !showAntsTable;
+    antsTableContainer.style.display = showAntsTable ? 'block' : 'none';
+    toggleAntsTableBtn.textContent = `Show Ants Table: ${showAntsTable ? 'ON' : 'OFF'}`;
+    if (showAntsTable) {
+        updateAntsTable();
+    }
+});
+
+// Add Color Supremacy toggle event listener
+toggleColorSupremacyBtn.addEventListener('click', () => {
+    colorSupremacy = !colorSupremacy;
+    toggleColorSupremacyBtn.textContent = `Color Supremacy: ${colorSupremacy ? 'ON' : 'OFF'}`;
+    
+    // When turning on, immediately clean up extinct colors
+    if (colorSupremacy) {
+        cleanupExtinctColors();
+        drawGrid(); // Redraw to show changes
+    }
+});
+
+// Add Revert Colors toggle event listener
+toggleRevertColorsBtn.addEventListener('click', () => {
+    if (structuresEnabled) {
+        revertColors = !revertColors;
+        toggleRevertColorsBtn.textContent = `Revert Colors: ${revertColors ? 'ON' : 'OFF'}`;
+        drawGrid();
+    }
+});
+
 widthInput.addEventListener('change', (e) => {
     const value = Math.max(1, parseInt((e.target as HTMLInputElement).value) || 25)
     widthSlider.value = Math.min(Math.max(value, parseInt(widthSlider.min)), parseInt(widthSlider.max)).toString()
@@ -827,11 +963,6 @@ speedNumberInput.addEventListener('change', (e) => {
     const value = Math.max(1, parseInt((e.target as HTMLInputElement).value) || 20)
     speedInput.value = Math.min(Math.max(value, parseInt(speedInput.min)), parseInt(speedInput.max)).toString()
     if (running) setRunning(true)
-})
-
-solidityInput.addEventListener('change', (e) => {
-    const value = Math.max(1, parseInt((e.target as HTMLInputElement).value) || 25)
-    soliditySlider.value = Math.min(Math.max(value, parseInt(soliditySlider.min)), parseInt(soliditySlider.max)).toString()
 })
 
 // Add fullness slider event listeners
@@ -872,19 +1003,15 @@ speedInput.addEventListener('input', (e) => {
     if (running) setRunning(true)
 })
 
-soliditySlider.addEventListener('input', (e) => {
-    solidityInput.value = (e.target as HTMLInputElement).value
-})
-
-canvas.addEventListener('mousedown', (e) => {
-	isDragging = true
-	handleCanvasPointer(e)
-})
-canvas.addEventListener('mousemove', (e) => {
-    if (isDragging && !isPlacingAnts) handleCanvasPointer(e) // Changed from antMode to isPlacingAnts
-})
-canvas.addEventListener('mouseup', () => { isDragging = false })
-canvas.addEventListener('mouseleave', () => { isDragging = false })
+// canvas.addEventListener('mousedown', (e) => {
+// 	isDragging = true
+// 	handleCanvasPointer(e)
+// })
+// canvas.addEventListener('mousemove', (e) => {
+//     if (isDragging && !isPlacingAnts) handleCanvasPointer(e) // Changed from antMode to isPlacingAnts
+// })
+// canvas.addEventListener('mouseup', () => { isDragging = false })
+// canvas.addEventListener('mouseleave', () => { isDragging = false })
 
 canvas.addEventListener('click', (e) => {
     if (isPlacingAnts) {
@@ -960,25 +1087,195 @@ genCounter.style.textAlign = 'center'
 genCounter.style.fontSize = '1rem'
 genCounter.style.margin = '0.5rem 0'
 
-// Call resize initially
-resizeCanvas()
+// Style the game container for side-by-side layout
+gameContainer.style.display = 'flex'
+gameContainer.style.gap = '1rem'
+gameContainer.style.justifyContent = 'center'
+gameContainer.style.width = '100%'
+gameContainer.style.maxWidth = '100vw'
+gameContainer.style.overflow = 'auto'
+
+// Style the ants table container
+antsTableContainer.style.display = showAntsTable ? 'block' : 'none'
+antsTableContainer.style.maxHeight = '600px'
+antsTableContainer.style.overflowY = 'auto'
+antsTableContainer.style.border = '1px solid #666'
+antsTableContainer.style.borderRadius = '4px'
+antsTableContainer.style.padding = '0.5rem'
+antsTableContainer.style.backgroundColor = '#1a1a1a'
+antsTableContainer.style.minWidth = '300px'
+
+// Style the ants table
+antsTable.style.width = '100%'
+antsTable.style.borderCollapse = 'collapse'
+antsTable.style.fontSize = '0.8rem'
+antsTable.style.color = '#fff'
+
+antsTableContainer.appendChild(antsTable)
+gameContainer.appendChild(canvas)
+gameContainer.appendChild(antsTableContainer)
+
+// Function to update the ants table with current ant data
+function updateAntsTable() {
+    if (!showAntsTable) return;
+
+    // Clear the table
+    antsTable.innerHTML = '';
+
+    // Create table header
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    
+    // Remove 'Direction' from the headers array
+    const headers = ['Color', 'Position', 'Fullness', 'Life Duration'];
+    headers.forEach(headerText => {
+        const th = document.createElement('th');
+        th.textContent = headerText;
+        th.style.padding = '0.5rem';
+        th.style.textAlign = 'left';
+        th.style.borderBottom = '1px solid #666';
+        headerRow.appendChild(th);
+    });
+    
+    thead.appendChild(headerRow);
+    antsTable.appendChild(thead);
+
+    // Create table body
+    const tbody = document.createElement('tbody');
+    
+    // Add a row for each ant
+    ants.forEach((ant, index) => {
+        const extAnt = ant as ExtendedAnt;
+        const row = document.createElement('tr');
+        
+        // Color cell with color indicator
+        const colorCell = document.createElement('td');
+        const colorBox = document.createElement('div');
+        colorBox.style.width = '15px';
+        colorBox.style.height = '15px';
+        colorBox.style.backgroundColor = ant.color;
+        colorBox.style.borderRadius = '2px';
+        colorBox.style.margin = '0 auto';
+        colorCell.appendChild(colorBox);
+        
+        // Position cell
+        const positionCell = document.createElement('td');
+        positionCell.textContent = `(${ant.x}, ${ant.y})`;
+        
+        // Remove direction cell creation
+        
+        // Fullness cell
+        const fullnessCell = document.createElement('td');
+        if (extAnt.fullness !== undefined && lifecycleEnabled && structuresEnabled) {
+            const percentage = Math.min(100, Math.round((extAnt.fullness / maxFullness) * 100));
+            fullnessCell.textContent = `${extAnt.fullness}/${maxFullness} (${percentage}%)`;
+        } else {
+            fullnessCell.textContent = 'N/A';
+        }
+        
+        // Life duration cell
+        const durationCell = document.createElement('td');
+        if (extAnt.lifeDuration !== undefined && lifecycleEnabled && structuresEnabled) {
+            const percentage = Math.min(100, Math.round((extAnt.lifeDuration / maxLifeDuration) * 100));
+            durationCell.textContent = `${extAnt.lifeDuration}/${maxLifeDuration} (${percentage}%)`;
+            // Color-code based on remaining life
+            if (percentage < 30) {
+                durationCell.style.color = '#ff6666';
+            }
+        } else {
+            durationCell.textContent = 'N/A';
+        }
+        
+        // Style the row
+        if (index % 2 === 1) {
+            row.style.backgroundColor = '#2a2a2a';
+        }
+        
+        // Add cells to row - remove directionCell from the array
+        [colorCell, positionCell, fullnessCell, durationCell].forEach(cell => {
+            cell.style.padding = '0.5rem';
+            cell.style.borderBottom = '1px solid #444';
+            row.appendChild(cell);
+        });
+        
+        tbody.appendChild(row);
+    });
+    
+    antsTable.appendChild(tbody);
+    
+    // If no ants, show a message
+    if (ants.length === 0) {
+        const noAntsRow = document.createElement('tr');
+        const noAntsCell = document.createElement('td');
+        // Update column span to 4 instead of 5 since we removed a column
+        noAntsCell.colSpan = 4;
+        noAntsCell.textContent = 'No ants active';
+        noAntsCell.style.textAlign = 'center';
+        noAntsCell.style.padding = '1rem 0';
+        noAntsRow.appendChild(noAntsCell);
+        tbody.appendChild(noAntsRow);
+    }
+}
 
 // Add button styling to prevent size changes
 const buttons = [
     playBtn, stepBtn, clearBtn, randomBtn, antModeBtn, 
     addRandomAntBtn, toggleGoLBtn, toggleStructuresBtn, 
-    toggleLifecycleBtn, toggleGridBtn // Add toggleGridBtn to the list
+    toggleLifecycleBtn, toggleGridBtn, toggleAntsTableBtn,
+    toggleColorSupremacyBtn, toggleRevertColorsBtn // Add the new button to the styling array
 ]
 buttons.forEach(btn => {
-    btn.style.minWidth = '100px'
-    btn.style.minHeight = '60px'
-    btn.style.padding = '0.5rem 1rem'
-    btn.style.border = '1px solid #666'
-    btn.style.borderRadius = '4px'
-    btn.style.backgroundColor = '#333'
-    btn.style.color = '#fff'
-    btn.style.cursor = 'pointer'
-    btn.style.fontFamily = 'inherit'
-    btn.style.fontSize = '14px'
-    btn.style.lineHeight = '1.2'
-})
+    btn.style.flexShrink = '0';
+    btn.style.padding = '0.5rem 1rem';
+    btn.style.fontSize = '1rem';
+    btn.style.borderRadius = '4px';
+    btn.style.border = 'none';
+    btn.style.cursor = 'pointer';
+    btn.style.transition = 'background-color 0.3s, transform 0.3s';
+    btn.addEventListener('mouseover', () => {
+        btn.style.backgroundColor = '#444';
+        btn.style.transform = 'scale(1.05)';
+    });
+    btn.addEventListener('mouseout', () => {
+        btn.style.backgroundColor = '';
+        btn.style.transform = '';
+    });
+});
+
+// Initialize Revert Colors button state based on Structures mode
+toggleRevertColorsBtn.disabled = !structuresEnabled;
+
+// Update the color of the ant based on the new logic
+function updateAntColor(ant: ExtendedAnt, progress: number) {
+    const hslMatch = ant.color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+    if (hslMatch) {
+        const [_, h, s, l] = hslMatch.map(Number);
+        
+        if (revertColors) {
+            // Revert Colors mode: black -> ant color -> white
+            if (progress < 0.5) {
+                // First half: black to ant color (normalized progress from 0->1)
+                const phase1Progress = progress * 2; // 0->1 across first half
+                const newSat = s * phase1Progress;
+                const newLight = l * phase1Progress;
+                ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`;
+            } else {
+                // Second half: ant color to white (normalized progress from 0->1)
+                const phase2Progress = (progress - 0.5) * 2; // 0->1 across second half
+                // Linear interpolation from ant color to white
+                const newSat = s * (1 - phase2Progress);
+                const newLight = l + (100 - l) * phase2Progress;
+                ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`;
+            }
+        } else {
+            // Original mode: ant color to white
+            // Linear interpolation of saturation (from original to 0%)
+            // and lightness (from original to 100%)
+            const newSat = s * progress;
+            const newLight = l + (100 - l) * (1 - progress);
+            ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`;
+        }
+    } else {
+        ctx.fillStyle = '#ffffff'; // Fallback to white if color parsing fails
+    }
+}
