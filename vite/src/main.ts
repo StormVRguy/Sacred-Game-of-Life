@@ -280,8 +280,9 @@ function drawGrid() {
             const cell = board.grid[y][x]
             if (cell.value === 1) {
                 if (cell.color && cell.solidity > 0) {
-                    // Get progress from 0 (fresh cell) to 1 (about to die)
-                    const progress = cell.solidity / maxSolidity
+                    // Calculate progress from 1 (new cell) to 0 (old cell)
+                    // This is a normalized value that represents the cell's life progress
+                    const normalProgress = cell.solidity / maxSolidity;
                     
                     // Handle different color modes
                     if (revertColors && structuresEnabled) {
@@ -290,19 +291,36 @@ function drawGrid() {
                         if (hslMatch) {
                             const [_, h, s, l] = hslMatch.map(Number)
                             
-                            if (progress < 0.5) {
-                                // First half: black to ant color (normalized progress from 0->1)
-                                const phase1Progress = progress * 2; // 0->1 across first half
-                                const newSat = s * phase1Progress;
-                                const newLight = l * phase1Progress;
-                                ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`
+                            if (normalProgress > 0.5) {
+                                // First half of life: black to ant color
+                                // normalProgress is from 1.0 (new) to 0.5 (mid-life)
+                                // We need to map this range to 0.0 (black) to 1.0 (full color)
+                                const phase1Progress = (1 - normalProgress) * 2; // Maps 1.0->0.5 to 0.0->1.0
+                                
+                                // At phase1Progress = 0, we want black (0% lightness)
+                                // At phase1Progress = 1, we want full ant color (l% lightness)
+                                const newLightness = l * phase1Progress;
+                                
+                                // At phase1Progress = 0, we want black (0% saturation)
+                                // At phase1Progress = 1, we want full ant color (s% saturation)
+                                const newSaturation = s * phase1Progress;
+                                
+                                ctx.fillStyle = `hsl(${h}, ${newSaturation}%, ${newLightness}%)`;
                             } else {
-                                // Second half: ant color to white (normalized progress from 0->1)
-                                const phase2Progress = (progress - 0.5) * 2; // 0->1 across second half
-                                // Linear interpolation from ant color to white
-                                const newSat = s * (1 - phase2Progress);
-                                const newLight = l + (100 - l) * phase2Progress;
-                                ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`
+                                // Second half of life: ant color to white
+                                // normalProgress is from 0.5 (mid-life) to 0.0 (end of life)
+                                // We need to map this range to 0.0 (full color) to 1.0 (white)
+                                const phase2Progress = (0.5 - normalProgress) * 2; // Maps 0.5->0.0 to 0.0->1.0
+                                
+                                // At phase2Progress = 0, we want full ant color (s% saturation)
+                                // At phase2Progress = 1, we want white (0% saturation)
+                                const newSaturation = s * (1 - phase2Progress);
+                                
+                                // At phase2Progress = 0, we want full ant color (l% lightness)
+                                // At phase2Progress = 1, we want white (100% lightness)
+                                const newLightness = l + (100 - l) * phase2Progress;
+                                
+                                ctx.fillStyle = `hsl(${h}, ${newSaturation}%, ${newLightness}%)`;
                             }
                         } else {
                             // Fallback if color parsing fails
@@ -315,8 +333,8 @@ function drawGrid() {
                             const [_, h, s, l] = hslMatch.map(Number)
                             // Linear interpolation of saturation (from original to 0%)
                             // and lightness (from original to 100%)
-                            const newSat = s * progress
-                            const newLight = l + (100 - l) * (1 - progress)
+                            const newSat = s * normalProgress
+                            const newLight = l + (100 - l) * (1 - normalProgress)
                             ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`
                         }
                     }
@@ -1244,38 +1262,3 @@ buttons.forEach(btn => {
 
 // Initialize Revert Colors button state based on Structures mode
 toggleRevertColorsBtn.disabled = !structuresEnabled;
-
-// Update the color of the ant based on the new logic
-function updateAntColor(ant: ExtendedAnt, progress: number) {
-    const hslMatch = ant.color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
-    if (hslMatch) {
-        const [_, h, s, l] = hslMatch.map(Number);
-        
-        if (revertColors) {
-            // Revert Colors mode: black -> ant color -> white
-            if (progress < 0.5) {
-                // First half: black to ant color (normalized progress from 0->1)
-                const phase1Progress = progress * 2; // 0->1 across first half
-                const newSat = s * phase1Progress;
-                const newLight = l * phase1Progress;
-                ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`;
-            } else {
-                // Second half: ant color to white (normalized progress from 0->1)
-                const phase2Progress = (progress - 0.5) * 2; // 0->1 across second half
-                // Linear interpolation from ant color to white
-                const newSat = s * (1 - phase2Progress);
-                const newLight = l + (100 - l) * phase2Progress;
-                ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`;
-            }
-        } else {
-            // Original mode: ant color to white
-            // Linear interpolation of saturation (from original to 0%)
-            // and lightness (from original to 100%)
-            const newSat = s * progress;
-            const newLight = l + (100 - l) * (1 - progress);
-            ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`;
-        }
-    } else {
-        ctx.fillStyle = '#ffffff'; // Fallback to white if color parsing fails
-    }
-}
