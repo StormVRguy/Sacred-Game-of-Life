@@ -294,71 +294,65 @@ function drawGrid() {
     for (let y = 0; y < board.height; y++) {
         for (let x = 0; x < board.width; x++) {
             const cell = board.grid[y][x]
+            
             if (cell.value === 1) {
+                // Handle live cells
                 if (cell.color && cell.solidity > 0) {
-                    // Calculate progress from 1 (new cell) to 0 (old cell)
-                    // This is a normalized value that represents the cell's life progress
+                    // Cell has color and positive solidity - apply color transitions
                     const normalProgress = cell.solidity / displayMaxSolidity;
                     
-                    // Handle different color modes
                     if (revertColors && structuresEnabled) {
-                        // Revert Colors mode: black -> ant color -> white
+                        // Revert Colors mode: black -> ant color -> transparent color
                         const hslMatch = cell.color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/)
                         if (hslMatch) {
                             const [_, h, s, l] = hslMatch.map(Number)
                             
                             if (normalProgress > 0.5) {
                                 // First half of life: black to ant color
-                                // normalProgress is from 1.0 (new) to 0.5 (mid-life)
-                                // We need to map this range to 0.0 (black) to 1.0 (full color)
                                 const phase1Progress = (1 - normalProgress) * 2; // Maps 1.0->0.5 to 0.0->1.0
-                                
-                                // At phase1Progress = 0, we want black (0% lightness)
-                                // At phase1Progress = 1, we want full ant color (l% lightness)
                                 const newLightness = l * phase1Progress;
-                                
-                                // At phase1Progress = 0, we want black (0% saturation)
-                                // At phase1Progress = 1, we want full ant color (s% saturation)
                                 const newSaturation = s * phase1Progress;
-                                
                                 ctx.fillStyle = `hsl(${h}, ${newSaturation}%, ${newLightness}%)`;
                             } else {
-                                // Second half of life: ant color to white
-                                // normalProgress is from 0.5 (mid-life) to 0.0 (end of life)
-                                // We need to map this range to 0.0 (full color) to 1.0 (white)
+                                // Second half of life: ant color to transparent color
                                 const phase2Progress = (0.5 - normalProgress) * 2; // Maps 0.5->0.0 to 0.0->1.0
-                                
-                                // At phase2Progress = 0, we want full ant color (s% saturation)
-                                // At phase2Progress = 1, we want white (0% saturation)
-                                const newSaturation = s * (1 - phase2Progress);
-                                
-                                // At phase2Progress = 0, we want full ant color (l% lightness)
-                                // At phase2Progress = 1, we want white (100% lightness)
-                                const newLightness = l + (100 - l) * phase2Progress;
-                                
-                                ctx.fillStyle = `hsl(${h}, ${newSaturation}%, ${newLightness}%)`;
+                                const alpha = Math.max(0.1, 1.0 - (phase2Progress * 0.9));
+                                ctx.fillStyle = `hsla(${h}, ${s}%, ${l}%, ${alpha})`;
                             }
                         } else {
-                            // Fallback if color parsing fails
-                            ctx.fillStyle = '#ffffff';
+                            ctx.fillStyle = '#ffffff'; // Fallback
                         }
                     } else {
-                        // Original mode: ant color to white
+                        // Original mode: ant color to transparent color
                         const hslMatch = cell.color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/)
                         if (hslMatch) {
                             const [_, h, s, l] = hslMatch.map(Number)
-                            // Linear interpolation of saturation (from original to 0%)
-                            // and lightness (from original to 100%)
-                            const newSat = s * normalProgress
-                            const newLight = l + (100 - l) * (1 - normalProgress)
-                            ctx.fillStyle = `hsl(${h}, ${newSat}%, ${newLight}%)`
+                            const newSat = s * normalProgress;
+                            const alpha = Math.max(0.1, normalProgress);
+                            ctx.fillStyle = `hsla(${h}, ${newSat}%, ${l}%, ${alpha})`;
+                        } else {
+                            ctx.fillStyle = '#ffffff'; // Fallback
                         }
                     }
                 } else {
-                    ctx.fillStyle = '#ffffff' // White for normal live cells
+                    // Standard white for normal live cells (without color or with zero solidity)
+                    ctx.fillStyle = '#ffffff';
                 }
             } else {
-                ctx.fillStyle = '#111827' // Dead cell color
+                // Cell is dead (value === 0)
+                if (cell.color && cell.solidity === 0 && !golEnabled) {
+                    // For dead cells with a color and solidity === 0, when GoL is OFF
+                    // Show a faint version of the cell's color
+                    const hslMatch = cell.color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+                    if (hslMatch) {
+                        const [_, h, s, l] = hslMatch.map(Number);
+                        ctx.fillStyle = `hsla(${h}, ${s}%, ${l}%, 0.1)`;
+                    } else {
+                        ctx.fillStyle = '#111827'; // Default dead cell color
+                    }
+                } else {
+                    ctx.fillStyle = '#111827'; // Default dead cell color
+                }
             }
             
             // Draw cell with or without gap based on grid visibility
@@ -680,6 +674,37 @@ function checkAntConflicts() {
     return false;
 }
 
+// Add a new function to handle the behavior of cells when solidity reaches 0
+function handleSolidityZero(board: Board): Board {
+    // Only do special handling if structures are enabled
+    if (!structuresEnabled) return board;
+    
+    for (let y = 0; y < board.height; y++) {
+        for (let x = 0; x < board.width; x++) {
+            const cell = board.grid[y][x];
+            
+            // Find cells with color but zero solidity
+            if (cell.color && cell.solidity === 0) {
+                if (golEnabled) {
+                    // When GoL is ON: cells with solidity=0 become normal live cells
+                    // This means they keep their alive state (value=1) but lose their color
+                    cell.color = null;
+                    // The cell remains alive (value=1) and will participate in GoL rules
+                } else {
+                    // When GoL is OFF: cells with solidity=0 should just disappear
+                    // Set them to dead if they're not already
+                    if (cell.value === 1) {
+                        cell.value = 0;
+                    }
+                    // Keep the color for rendering with low opacity
+                }
+            }
+        }
+    }
+    
+    return board;
+}
+
 function setRunning(next: boolean) {
     running = next
     playBtn.textContent = running ? 'Pause' : 'Play'
@@ -693,11 +718,12 @@ function setRunning(next: boolean) {
             switch (stepPhase) {
                 case 0:
                     board = reduceSolidity(board)
+                    board = handleSolidityZero(board) // Call the new function
                     if (golEnabled) {
                         board = nextGeneration(board)
                     }
                     if (colorSupremacy) {
-                        cleanupExtinctColors();  // Check for extinct colors at the end of each GOL phase
+                        cleanupExtinctColors();
                     }
                     stepPhase = 1
                     break
@@ -779,11 +805,12 @@ function stepOnce() {
     switch (stepPhase) {
         case 0:
             board = reduceSolidity(board)
+            board = handleSolidityZero(board) // Call the new function
             if (golEnabled) {
                 board = nextGeneration(board)
             }
             if (colorSupremacy) {
-                cleanupExtinctColors();  // Check for extinct colors at the end of each GOL phase
+                cleanupExtinctColors();
             }
             stepPhase = 1
             break
