@@ -570,14 +570,23 @@ function checkAntReproduction(ant: ExtendedAnt) {
                 [adjacentPositions[i], adjacentPositions[j]] = [adjacentPositions[j], adjacentPositions[i]];
             }
 
-            // Determine how many offspring to create (40% chance for 1, 60% chance for 2)
-            const willCreateTwo = Math.random() < 0.6;
+            // Count current ants of this color
+            const currentColorCount = countAntsOfColor(ant.color);
+            
+            // Determine how many offspring to create
+            // If we've reached the max for this color, only create 1 offspring
+            // Otherwise, use the standard logic (40% chance for 1, 60% chance for 2)
+            const willCreateTwo = currentColorCount < MAX_ANTS_PER_COLOR && Math.random() < 0.6;
             const numNewAnts = willCreateTwo ? 
                 Math.min(2, adjacentPositions.length) : 
                 Math.min(1, adjacentPositions.length);
             
             // Mutations only happen for single offspring, not when producing 2 offspring
+            // We keep the same mutation logic regardless of color cap
             const hasMutation = numNewAnts === 1 && Math.random() < 0.1;
+            
+            // Track how many new ants of the original color we've created
+            let newAntsOfOriginalColor = 0;
             
             for (let i = 0; i < numNewAnts; i++) {
                 const pos = adjacentPositions[i];
@@ -588,8 +597,19 @@ function checkAntReproduction(ant: ExtendedAnt) {
                 const dir = dirs[Math.floor(Math.random() * dirs.length)];
                 
                 // Set the color - either parent's color or a new random color if mutation occurs
-                // Note: hasMutation is already false when creating 2 offspring
-                const color = hasMutation ? nextDistinctColor() : ant.color;
+                let color;
+                
+                if (hasMutation) {
+                    color = nextDistinctColor(); // Mutated color
+                } else {
+                    // If we'd exceed the max color cap, force a mutation
+                    if (currentColorCount + newAntsOfOriginalColor >= MAX_ANTS_PER_COLOR) {
+                        color = nextDistinctColor(); // Force a mutation
+                    } else {
+                        color = ant.color; // Keep parent's color
+                        newAntsOfOriginalColor++; // Count this new ant of original color
+                    }
+                }
                 
                 // Create ant
                 const id = `ant-${antCounter++}`;
@@ -905,6 +925,14 @@ function randomize(density = 0.25) {
 	drawGrid()
 }
 
+// Add a constant for the maximum number of ants per color
+const MAX_ANTS_PER_COLOR = 8;
+
+// Function to count ants of a specific color
+function countAntsOfColor(color: string): number {
+    return ants.filter(ant => ant.color === color).length;
+}
+
 // Interactions
 playBtn.addEventListener('click', () => setRunning(!running))
 stepBtn.addEventListener('click', () => { if (!running) stepOnce() })
@@ -1199,8 +1227,8 @@ function updateAntsTable() {
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
     
-    // Remove 'Direction' from the headers array
-    const headers = ['Color', 'Position', 'Fullness', 'Life Duration'];
+    // Add 'Same Color' to the headers array
+    const headers = ['Color', 'Position', 'Fullness', 'Life Duration', 'Same Color'];
     headers.forEach(headerText => {
         const th = document.createElement('th');
         th.textContent = headerText;
@@ -1235,8 +1263,6 @@ function updateAntsTable() {
         const positionCell = document.createElement('td');
         positionCell.textContent = `(${ant.x}, ${ant.y})`;
         
-        // Remove direction cell creation
-        
         // Fullness cell
         const fullnessCell = document.createElement('td');
         if (extAnt.fullness !== undefined && lifecycleEnabled && structuresEnabled) {
@@ -1259,13 +1285,26 @@ function updateAntsTable() {
             durationCell.textContent = 'N/A';
         }
         
+        // Same color count cell - NEW!
+        const sameColorCell = document.createElement('td');
+        const colorCount = countAntsOfColor(ant.color);
+        sameColorCell.textContent = `${colorCount}/${MAX_ANTS_PER_COLOR}`;
+        
+        // Add visual indication when approaching the color limit
+        if (colorCount >= MAX_ANTS_PER_COLOR) {
+            sameColorCell.style.color = '#ff6666'; // Red when at max
+            sameColorCell.style.fontWeight = 'bold';
+        } else if (colorCount >= MAX_ANTS_PER_COLOR * 0.75) {
+            sameColorCell.style.color = '#ffcc66'; // Orange when approaching max
+        }
+        
         // Style the row
         if (index % 2 === 1) {
             row.style.backgroundColor = '#2a2a2a';
         }
         
-        // Add cells to row - remove directionCell from the array
-        [colorCell, positionCell, fullnessCell, durationCell].forEach(cell => {
+        // Add cells to row
+        [colorCell, positionCell, fullnessCell, durationCell, sameColorCell].forEach(cell => {
             cell.style.padding = '0.5rem';
             cell.style.borderBottom = '1px solid #444';
             row.appendChild(cell);
@@ -1280,8 +1319,8 @@ function updateAntsTable() {
     if (ants.length === 0) {
         const noAntsRow = document.createElement('tr');
         const noAntsCell = document.createElement('td');
-        // Update column span to 4 instead of 5 since we removed a column
-        noAntsCell.colSpan = 4;
+        // Update column span to 5 to account for the new column
+        noAntsCell.colSpan = 5;
         noAntsCell.textContent = 'No ants active';
         noAntsCell.style.textAlign = 'center';
         noAntsCell.style.padding = '1rem 0';
@@ -1317,3 +1356,25 @@ buttons.forEach(btn => {
 
 // Initialize Revert Colors button state based on Structures mode
 toggleRevertColorsBtn.disabled = !structuresEnabled;
+
+// At the beginning of your script, after importing but before creating UI elements
+function setFavicon(imageUrl: string) {
+    // Check if a favicon already exists and remove it
+    const existingFavicon = document.querySelector('link[rel="icon"]');
+    if (existingFavicon) {
+        document.head.removeChild(existingFavicon);
+    }
+    
+    // Create a new favicon link element
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.href = imageUrl;
+    link.type = 'image/png'; // Adjust if using a different format
+    
+    // Add the favicon link to the document head
+    document.head.appendChild(link);
+}
+
+// You can call this function with the path to your favicon
+// For example, if you have a favicon.png in your assets folder:
+setFavicon('/favicon.png');
