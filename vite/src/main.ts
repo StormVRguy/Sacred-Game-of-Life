@@ -12,6 +12,8 @@ let board: Board = createBoard(gridWidth, gridHeight, 0)
 let running = false
 let timer: number | null = null
 let generation = 0
+let animationFrameId: number | null = null
+let lastStepTime: number = 0
 let showGrid = false // New state variable to track grid visibility
 let showAntsTable = false // New state variable to track ants table visibility
 let colorSupremacy = false // New state variable for Color Supremacy mode
@@ -724,99 +726,163 @@ function handleSolidityZero(board: Board): Board {
     return board;
 }
 
-function setRunning(next: boolean) {
-    running = next
-    playBtn.textContent = running ? 'Pause' : 'Play'
-    if (timer) {
-        clearInterval(timer)
-        timer = null
-    }
-    if (running) {
-        const interval = Number(speedNumberInput.value)
-        timer = window.setInterval(() => {
-            switch (stepPhase) {
-                case 0:
-                    board = reduceSolidity(board)
-                    board = handleSolidityZero(board) // Call the new function
-                    if (golEnabled) {
-                        board = nextGeneration(board)
-                    }
-                    if (colorSupremacy) {
-                        cleanupExtinctColors();
-                    }
-                    stepPhase = 1
-                    break
-                case 1:
-                    if (ants.length > 0) {
-                        // Correctly checks if lifecycle is enabled before decreasing life duration
-                        if (lifecycleEnabled && structuresEnabled) {
-                            checkAntLifeDuration();
+// Function to execute a single simulation step (one phase)
+function executeStep() {
+    switch (stepPhase) {
+        case 0:
+            board = reduceSolidity(board)
+            board = handleSolidityZero(board) // Call the new function
+            if (golEnabled) {
+                board = nextGeneration(board)
+            }
+            if (colorSupremacy) {
+                cleanupExtinctColors();
+            }
+            stepPhase = 1
+            break
+        case 1:
+            if (ants.length > 0) {
+                // Correctly checks if lifecycle is enabled before decreasing life duration
+                if (lifecycleEnabled && structuresEnabled) {
+                    checkAntLifeDuration();
+                }
+                
+                // Check for conflicts between ants before movement
+                checkAntConflicts();
+                
+                // Track cell states before movement to detect changes
+                const cellStatesBefore = ants.map(ant => {
+                    const { x, y } = ant;
+                    return { ant, state: board.grid[y][x].value };
+                });
+                
+                // Update to pass maxSolidity from the input
+                stepAnts(board, ants, structuresEnabled, parseInt(lifeDurationInput.value), parseInt(maxSolidityInput.value))
+                
+                // Check for conflicts after movement
+                checkAntConflicts();
+                
+                // If lifecycle is enabled, check for cell state changes
+                if (lifecycleEnabled && structuresEnabled) {
+                    // Process this in reverse order since we may be removing ants
+                    for (let i = cellStatesBefore.length - 1; i >= 0; i--) {
+                        const { ant, state: beforeState } = cellStatesBefore[i];
+                        // Skip if ant no longer exists (was removed during conflict)
+                        if (!ants.includes(ant)) continue;
+                        
+                        const extAnt = ant as ExtendedAnt;
+                        const afterState = board.grid[ant.y][ant.x].value;
+                        
+                        // Track if fullness was increased in this step
+                        let fullnessIncreased = false;
+                        
+                        // If ant turned off a cell (changed from 1 to 0), increase fullness once per step
+                        if (beforeState === 1 && afterState === 0 && extAnt.fullness !== undefined && !fullnessIncreased) {
+                            extAnt.fullness += 1;
+                            fullnessIncreased = true;
+                            
+                            // Check for reproduction after fullness increases
+                            checkAntReproduction(extAnt);
                         }
                         
-                        // Check for conflicts between ants before movement
-                        checkAntConflicts();
-                        
-                        // Track cell states before movement to detect changes
-                        const cellStatesBefore = ants.map(ant => {
-                            const { x, y } = ant;
-                            return { ant, state: board.grid[y][x].value };
-                        });
-                        
-                        // Update to pass maxSolidity from the input
-                        stepAnts(board, ants, structuresEnabled, parseInt(lifeDurationInput.value), parseInt(maxSolidityInput.value))
-                        
-                        // Check for conflicts after movement
-                        checkAntConflicts();
-                        
-                        // If lifecycle is enabled, check for cell state changes
-                        if (lifecycleEnabled && structuresEnabled) {
-                            // Process this in reverse order since we may be removing ants
-                            for (let i = cellStatesBefore.length - 1; i >= 0; i--) {
-                                const { ant, state: beforeState } = cellStatesBefore[i];
-                                // Skip if ant no longer exists (was removed during conflict)
-                                if (!ants.includes(ant)) continue;
-                                
-                                const extAnt = ant as ExtendedAnt;
-                                const afterState = board.grid[ant.y][ant.x].value;
-                                
-                                // Track if fullness was increased in this step
-                                let fullnessIncreased = false;
-                                
-                                // If ant turned off a cell (changed from 1 to 0), increase fullness once per step
-                                if (beforeState === 1 && afterState === 0 && extAnt.fullness !== undefined && !fullnessIncreased) {
-                                    extAnt.fullness += 1;
-                                    fullnessIncreased = true;
-                                    
-                                    // Check for reproduction after fullness increases
-                                    checkAntReproduction(extAnt);
-                                }
-                                
-                                // Track cells that the ant turns on with solidity
-                                if (beforeState === 0 && afterState === 1 && structuresEnabled) {
-                                    // Cell was turned on and has solidity
-                                    const cell = board.grid[ant.y][ant.x];
-                                    if (cell.solidity > 0 && cell.color) {
-                                        if (!extAnt.ownedCells) extAnt.ownedCells = [];
-                                        // Add to owned cells if not already there
-                                        if (!extAnt.ownedCells.some(c => c.x === ant.x && c.y === ant.y)) {
-                                            extAnt.ownedCells.push({ x: ant.x, y: ant.y });
-                                        }
-                                    }
+                        // Track cells that the ant turns on with solidity
+                        if (beforeState === 0 && afterState === 1 && structuresEnabled) {
+                            // Cell was turned on and has solidity
+                            const cell = board.grid[ant.y][ant.x];
+                            if (cell.solidity > 0 && cell.color) {
+                                if (!extAnt.ownedCells) extAnt.ownedCells = [];
+                                // Add to owned cells if not already there
+                                if (!extAnt.ownedCells.some(c => c.x === ant.x && c.y === ant.y)) {
+                                    extAnt.ownedCells.push({ x: ant.x, y: ant.y });
                                 }
                             }
                         }
                     }
-                    stepPhase = 0
-                    generation += 1
-                    if (colorSupremacy) {
-                        cleanupExtinctColors();  // Check for extinct colors at the end of each ant movement phase
-                    }
-                    break
+                }
             }
-            genCounter.textContent = `Generation: ${generation}`
-            drawGrid()
-            updateAntsTable() // Update ants table on each step
-        }, interval / 2)
+            stepPhase = 0
+            generation += 1
+            if (colorSupremacy) {
+                cleanupExtinctColors();  // Check for extinct colors at the end of each ant movement phase
+            }
+            break
+    }
+}
+
+// Main simulation loop using timestamp-based approach
+// This ensures the simulation continues even when the browser tab is hidden/throttled
+// by catching up on missed steps when the timer finally fires
+function runSimulationLoop() {
+    if (!running) return;
+    
+    const now = performance.now();
+    const interval = Number(speedNumberInput.value);
+    const stepInterval = interval / 2; // Each phase takes half the interval
+    
+    // If this is the first call, initialize lastStepTime
+    if (lastStepTime === 0) {
+        lastStepTime = now;
+    }
+    
+    // Calculate how much time has passed
+    const elapsed = now - lastStepTime;
+    
+    // Calculate how many steps we should have executed
+    let stepsToRun = Math.floor(elapsed / stepInterval);
+    
+    // Safety limit: don't run more than 100 steps at once to prevent browser freeze
+    // If we're way behind, we'll catch up gradually
+    const maxStepsPerFrame = 100;
+    const wasLimited = stepsToRun > maxStepsPerFrame;
+    if (wasLimited) {
+        stepsToRun = maxStepsPerFrame;
+    }
+    
+    if (stepsToRun > 0) {
+        // Run all the steps we missed (catch up)
+        for (let i = 0; i < stepsToRun && running; i++) {
+            executeStep();
+        }
+        
+        // Update UI only after catching up
+        genCounter.textContent = `Generation: ${generation}`;
+        drawGrid();
+        updateAntsTable();
+        
+        // Update lastStepTime based on steps we actually ran
+        lastStepTime += stepsToRun * stepInterval;
+    }
+    
+    // Schedule next check - use a small interval to ensure we don't miss steps
+    // Even if throttled, we'll catch up when it fires
+    if (running) {
+        timer = window.setTimeout(() => {
+            runSimulationLoop();
+        }, Math.max(1, stepInterval / 4)); // Check 4x more frequently than step interval
+    }
+}
+
+function setRunning(next: boolean) {
+    running = next
+    playBtn.textContent = running ? 'Pause' : 'Play'
+    
+    // Clear any existing timers
+    if (timer) {
+        clearTimeout(timer)
+        timer = null
+    }
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId)
+        animationFrameId = null
+    }
+    
+    // Reset timestamp when starting
+    if (running) {
+        lastStepTime = 0; // Will be initialized on first call
+        // Start the simulation loop
+        runSimulationLoop()
+    } else {
+        lastStepTime = 0;
     }
 }
 
