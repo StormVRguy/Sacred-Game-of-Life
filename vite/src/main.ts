@@ -1,5 +1,5 @@
 import './style.css'
-import { createBoard, nextGeneration, toggleCell, getCell, setCell, clearBoard, reduceSolidity, type Board } from './game/board'
+import { createBoard, nextGeneration, getCell, setCell, clearBoard, reduceSolidity, type Board } from './game/board'
 import { createAnt, stepAnts, type Ant, type Direction } from './game/ants'
 
 // Game configuration
@@ -24,15 +24,14 @@ let nextHue = 0
 let stepPhase = 0
 let golEnabled = true
 let isPlacingAnts = false
-let isDragging = false
 
 // Structures state
 let structuresEnabled = true  // Changed from false to true
-let maxSolidity = 100        // Add new variable for maximum solidity
+let maxSolidity = 250        // Add new variable for maximum solidity
 
 // Lifecycle state
 let lifecycleEnabled = true   // Changed from false to true
-let maxFullness = 110        // Changed from 50 to 110
+let maxFullness = 100        // Changed from 50 to 110
 let maxLifeDuration = 500    // Changed from 100 to 500
 
 // UI elements
@@ -178,7 +177,7 @@ lifeDurationSlider.value = maxLifeDuration.toString()
 
 maxSoliditySlider.type = 'range'  // Configure max solidity slider
 maxSoliditySlider.min = '10'
-maxSoliditySlider.max = '200'
+maxSoliditySlider.max = '300'
 maxSoliditySlider.value = maxSolidity.toString()
 
 // Update labels, simplify them
@@ -1104,16 +1103,6 @@ speedInput.addEventListener('input', (e) => {
     if (running) setRunning(true)
 })
 
-// canvas.addEventListener('mousedown', (e) => {
-// 	isDragging = true
-// 	handleCanvasPointer(e)
-// })
-// canvas.addEventListener('mousemove', (e) => {
-//     if (isDragging && !isPlacingAnts) handleCanvasPointer(e) // Changed from antMode to isPlacingAnts
-// })
-// canvas.addEventListener('mouseup', () => { isDragging = false })
-// canvas.addEventListener('mouseleave', () => { isDragging = false })
-
 canvas.addEventListener('click', (e) => {
     if (isPlacingAnts) {
         const rect = canvas.getBoundingClientRect()
@@ -1122,17 +1111,6 @@ canvas.addEventListener('click', (e) => {
         addAntAt(x, y)
     }
 })
-
-// Update handleCanvasPointer function
-function handleCanvasPointer(e: MouseEvent) {
-    const rect = canvas.getBoundingClientRect()
-    const x = Math.floor((e.clientX - rect.left) / cellSize)
-    const y = Math.floor((e.clientY - rect.top) / cellSize)
-    if (!isPlacingAnts) {
-        toggleCell(board, x, y)
-        drawGrid()
-    }
-}
 
 // Add resize handling
 function handleGridResize() {
